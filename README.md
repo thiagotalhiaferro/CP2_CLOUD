@@ -1,4 +1,4 @@
-# Projeto CRUD Azure
+# CP2_CLOUD
 
 Aplicação em Flask com integração ao Azure SQL.
 
