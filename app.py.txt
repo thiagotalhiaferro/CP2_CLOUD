@@ -1,0 +1,120 @@
+from flask import Flask, request, redirect
+import pyodbc
+
+app = Flask(__name__)
+
+SERVER = ''
+DATABASE = ''
+USERNAME = ''
+PASSWORD = ''
+
+def get_connection():
+    return pyodbc.connect(
+        f'DRIVER={{ODBC Driver 18 for SQL Server}};'
+        f'SERVER={SERVER};'
+        f'DATABASE={DATABASE};'
+        f'UID={USERNAME};'
+        f'PWD={PASSWORD};'
+        f'Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;'
+    )
+
+def style():
+    return """
+    <style>
+    body { font-family: Arial; background: #f4f6f8; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; background: white; }
+    th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
+    th { background: #007BFF; color: white; }
+    </style>
+    """
+
+@app.route('/')
+def index():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, preco, quantidade FROM product")
+    produtos = cursor.fetchall()
+    conn.close()
+
+    html = style()
+    html += "<h1>Lista de Produtos</h1>"
+    html += "<a href='/add'>Adicionar Produto</a><br><br>"
+    html += "<table><tr><th>ID</th><th>Nome</th><th>Preço</th><th>Qtd</th><th>Ações</th></tr>"
+
+    for p in produtos:
+        html += f"<tr><td>{p.id}</td><td>{p.nome}</td><td>{p.preco}</td><td>{p.quantidade}</td>"
+        html += f"<td><a href='/edit/{p.id}'>Editar</a> | <a href='/delete/{p.id}'>Excluir</a></td></tr>"
+
+    html += "</table>"
+    return html
+
+@app.route('/add', methods=['GET', 'POST'])
+def add():
+    if request.method == 'POST':
+        nome = request.form['nome']
+        preco = request.form['preco']
+        quantidade = request.form['quantidade']
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO product (nome, preco, quantidade) VALUES (?, ?, ?)",
+            (nome, preco, quantidade)
+        )
+        conn.commit()
+        conn.close()
+
+        return redirect('/')
+
+    return style() + '''
+    <h1>Adicionar Produto</h1>
+    <form method="post">
+    Nome: <input name="nome"><br>
+    Preço: <input name="preco"><br>
+    Quantidade: <input name="quantidade"><br>
+    <input type="submit" value="Salvar">
+    </form>
+    '''
+
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit(id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        nome = request.form['nome']
+        preco = request.form['preco']
+        quantidade = request.form['quantidade']
+
+        cursor.execute(
+            "UPDATE product SET nome=?, preco=?, quantidade=? WHERE id=?",
+            (nome, preco, quantidade, id)
+        )
+        conn.commit()
+        conn.close()
+        return redirect('/')
+
+    cursor.execute("SELECT nome, preco, quantidade FROM product WHERE id=?", (id,))
+    produto = cursor.fetchone()
+    conn.close()
+
+    return style() + f'''
+    <h1>Editar Produto</h1>
+    <form method="post">
+    Nome: <input name="nome" value="{produto.nome}"><br>
+    Preço: <input name="preco" value="{produto.preco}"><br>
+    Quantidade: <input name="quantidade" value="{produto.quantidade}"><br>
+    <input type="submit" value="Atualizar">
+    </form>
+    '''
+
+@app.route('/delete/<int:id>')
+def delete(id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM product WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+    return redirect('/')
+
+app.run(host='0.0.0.0', port=8080)
